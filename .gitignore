@@ -1,0 +1,17 @@
+# Binarios
+*.exe
+*.exe~
+/bin/
+
+# Go
+/vendor/
+
+# Configuración local
+application-local.yaml
+
+# IDE
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
