@@ -15,3 +15,7 @@ application-local.yaml
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Contexto y planeación internos (NO publicar — se copian a mano entre máquinas)
+CLAUDE.md
+docs/
