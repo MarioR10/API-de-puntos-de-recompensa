@@ -1,0 +1,32 @@
+#ARCHIVO DE CONFIGURACION PARA DOCKER
+#CONFIGURAMOS POSTGRES Y REDIS PARA QUE SE LEVANTEN EN UN CONTENEDOR
+services:
+  postgres:
+    image: postgres:17-alpine       #VERSION DE POSTGRES
+    container_name: puntos-postgres #NOMBRE DEL CONTENEDOR
+    environment: #CONFIG DE VARIABLES DE ENTORNO INCIALES
+      POSTGRES_USER: puntos       #USUARIO
+      POSTGRES_PASSWORD: puntos_local_dev #CONTRASEÑA
+      POSTGRES_DB: puntos #BASE DE DATOS (LA CREA AUTOMATICAMENTE)
+    ports:
+      - "5432:5432"    #IZQUEIRDA EL PUERTO DE LA COMPUTADORA, DERECHA EL PUERTO DEL CONTENEDOR
+    volumes:
+      - postgres-data:/var/lib/postgresql/data #CARPETA VIRTUAL CON RUTA INTERNA DONDE POSTGRES ALMACENA LOS DATOS PARA QUE SE PERSISTAN
+    healthcheck: #MONITOREO DE SALUD, CADA 5 SEGUNDOS EJECUTA EL COMANDO pg_isready PARA VERIFICAR QUE LA DB ENCENDIO Y ESTA LISTA PARA RECIBIR CONEXIONES
+      test: [ "CMD-SHELL", "pg_isready -U puntos -d puntos" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    container_name: puntos-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
