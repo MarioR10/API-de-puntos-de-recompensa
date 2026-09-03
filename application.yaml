@@ -1,0 +1,4 @@
+#Archivo base de configuraciones
+
+server:
+  port: 8080
