@@ -1,4 +1,10 @@
 #Archivo base de configuraciones
-
 server:
   port: 8080
+database:
+  postgres:
+    host: localhost
+    port: 5432
+    user: puntos
+    dbname: puntos
+    sslmode: disable

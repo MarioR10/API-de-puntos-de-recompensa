@@ -15,6 +15,8 @@ import (
 	"os"
 	"os/signal"
 	"proyecto-Go/internal/config"
+	"proyecto-Go/internal/platform/database"
+	"proyecto-Go/internal/user"
 	"syscall"
 	"time"
 
@@ -23,6 +25,14 @@ import (
 
 func main() {
 
+	//main minimo: llama a la funcion run(), si algo falla loguea y sale
+	if err := run(); err != nil {
+		slog.Error("error fatal", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	// Creamos un logger que escribe los logs en formato JSON
 	// y los envía a stdout (la salida estándar de la aplicación).
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -36,13 +46,7 @@ func main() {
 
 	// Si la configuración no pudo cargarse, no podemos continuar.
 	if err != nil {
-
-		// Los argumentos después del mensaje se pasan en pares:
-		// "clave", valor
-		logger.Error("no se pudieron cargar la configuraciones", "error", err)
-		// Terminamos inmediatamente el proceso indicando que ocurrió
-		// un error (código de salida 1).
-		os.Exit(1)
+		return fmt.Errorf("cargando configuraciones: %w", err)
 	}
 
 	// Creamos el router de chi.
@@ -62,7 +66,7 @@ func main() {
 	// Obtenemos el puerto configurado, por ejemplo: 8080
 	// y lo convertimos al formato que necesita http.Server: ":8080"
 	// %d indica que queremos insertar un número entero.
-	addr := fmt.Sprintf(":%d", cfg.ServerPort())
+	addr := fmt.Sprintf(":%d", cfg.GetInt("server.port"))
 
 	//Creamos un objeto server. Es un struct que representa el servidor web con su configuracion.
 	//le pasamos la direccion en la que escucha y el router que atiende las peticiones
@@ -87,15 +91,40 @@ func main() {
 		os.Interrupt,
 		syscall.SIGTERM,
 	)
-	// Cuando main termine, ejecutamos stop para liberar
+	// Cuando run termine, ejecutamos stop para liberar
 	// los recursos asociados al contexto.
 	defer stop()
+
+	//Pool de conexiones a Postgres
+	pool, err := database.NewPool(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("conectando a la base de datos: %w", err)
+	}
+	defer pool.Close() //corre al retornar run(): cierra el pool de conexiones
+	logger.Info("conectado a la base de datos")
+
+	// TEMPORAL: demostración de la Fase 2 (un repo ejecutando un query desde .sql).
+	//Creando el repositorio y pasandole dependencias
+
+	userRepo, err := user.NewRepository(pool)
+
+	if err != nil {
+
+		return fmt.Errorf("creando repositorio de usuario: %w", err)
+	}
+
+	total, err := userRepo.CountUsers(ctx)
+
+	if err != nil {
+		return fmt.Errorf("verificando acceso a la tabla users: %w", err)
+	}
+	logger.Info("usuarios en la base", "total", total)
 
 	// Ejecutamos ListenAndServe en una goroutine porque es un método
 	// bloqueante: mientras el servidor está funcionando, esta llamada
 	// permanece ejecutándose atendiendo peticiones.
 	//
-	// Al utilizar "go", main puede continuar y quedarse esperando la señal de apagado.
+	// Al utilizar "go", run() puede continuar y quedarse esperando la señal de apagado.
 	//dentro del goroutine se levanta el servidor web
 	go func() {
 		logger.Info("servicio escuchando", "addr", addr)
@@ -119,7 +148,7 @@ func main() {
 		}
 	}()
 
-	// main se queda bloqueado aquí.
+	// run() se queda bloqueado aquí.
 	// ctx.Done() devuelve un canal utilizado para avisar
 	// que el contexto fue cancelado.
 	// <- significa "esperar/recibir del canal".
@@ -147,8 +176,8 @@ func main() {
 	// 2. Espera a que terminen las peticiones que ya están ejecutándose.
 	// 3. Respeta el límite de tiempo definido en shutdownCtx.
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("apagado forzado (se acabo el plazo de espera)", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("apagado forzado (se acabó el plazo): %w", err)
 	}
 	logger.Info("servidor apagado correctamente")
+	return nil
 }
