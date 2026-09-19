@@ -8,3 +8,6 @@ database:
     user: puntos
     dbname: puntos
     sslmode: disable
+
+bcrypt:
+  cost: 10 # costo  que se le pasa al metodo de bcrypt

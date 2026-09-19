@@ -7,4 +7,6 @@ import "errors"
 var (
 	ErrInvalidCredentials = errors.New("credenciales invalidas")
 	ErrEmailAlreadyExists = errors.New("el email ya existe")
+	ErrPasswordTooLong    = errors.New("la contraseña excede el limite permitido")
+	ErrPasswordTooShort   = errors.New("la contraseña es muy corta")
 )
