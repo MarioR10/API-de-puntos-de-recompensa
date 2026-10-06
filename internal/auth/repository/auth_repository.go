@@ -68,12 +68,12 @@ func (repo *userRepositoryImpl) CreateUser(ctx context.Context, user domain.User
 
 	//Validamos si es un error de tipo PgError, si lo es verificamos si ese error postgres es debido a una violacion a UNIQUE
 	if errors.As(err, &pgxErr) && pgxErr.Code == "23505" {
-		return domain.User{}, fmt.Errorf("insertando usario: %w", domain.ErrEmailAlreadyExists)
+		return domain.User{}, fmt.Errorf("insertando usuario: %w", domain.ErrEmailAlreadyExists)
 	}
 
 	//Para cualquier otro error, validamos tambien para no mandar un error silencioso
 	if err != nil {
-		return domain.User{}, fmt.Errorf("insertando usario: %w", err)
+		return domain.User{}, fmt.Errorf("insertando usuario: %w", err)
 	}
 
 	//Si no hay error, retornamos el usuario creado y nil

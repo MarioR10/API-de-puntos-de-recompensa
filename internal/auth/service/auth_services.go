@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"proyecto-Go/internal/auth/domain"
+	"strings"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
@@ -26,53 +27,58 @@ func NewAuthService(logger *slog.Logger, repository domain.IUserRepository, cost
 	return &authServiceImpl{logger: logger, repository: repository, cost: cost}
 }
 
-func (s *authServiceImpl) Register(ctx context.Context, request UserRegisterRequest) (UserRegisterResponse, error) {
+func (s *authServiceImpl) Register(ctx context.Context, email, password string) (domain.User, error) {
 
-	//1.Validar contraseña antes de hashear
+	//1. Normalizamos el email
+	emailNormalized := normalizeEmail(email)
 
-	//1.1 es muy corta
-	if utf8.RuneCountInString(request.Password) < minPasswordLength {
-		return UserRegisterResponse{}, fmt.Errorf("registrando al usuario: %w", domain.ErrPasswordTooShort)
+	//2.Validar contraseña antes de hashear
+
+	//2.1 es muy corta
+	if utf8.RuneCountInString(password) < minPasswordLength {
+		return domain.User{}, fmt.Errorf("registrando al usuario: %w", domain.ErrPasswordTooShort)
 	}
-	//1.2 es muy larga
-	if len(request.Password) > maxPasswordBytes {
-		return UserRegisterResponse{}, fmt.Errorf("registrando al usuario: %w", domain.ErrPasswordTooLong)
+	//2.2 es muy larga
+	if len(password) > maxPasswordBytes {
+		return domain.User{}, fmt.Errorf("registrando al usuario: %w", domain.ErrPasswordTooLong)
 	}
 
-	//2. Proceso de hashing
+	//3. Proceso de hashing
 
-	// 2.1 convertimos en bytes la contraseña
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(request.Password), s.cost)
+	// 3.1 convertimos en bytes la contraseña
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), s.cost)
 
 	if errors.Is(err, bcrypt.ErrPasswordTooLong) {
-		return UserRegisterResponse{}, fmt.Errorf("contraseña invalida: %w", domain.ErrPasswordTooLong)
+		return domain.User{}, fmt.Errorf("registrando al usuario: %w", domain.ErrPasswordTooLong)
 	}
 
 	if err != nil {
 
-		return UserRegisterResponse{}, fmt.Errorf("hubo un problema al hashear la contraseña: %w", err)
+		return domain.User{}, fmt.Errorf("registrando al usuario: %w", err)
 	}
 
-	// 2.2 Convertimos a entidad de dominio
 	userDomain := domain.User{
-		Email:        request.email,
+		Email:        emailNormalized,
 		PasswordHash: string(passwordHash),
 	}
 
-	// 2.3 persistimos a la basse de datos
+	// 4. persistimos a la basse de datos
 	userLoad, err := s.repository.CreateUser(ctx, userDomain)
 
 	if err != nil {
-		return UserRegisterResponse{}, fmt.Errorf("ocurrio un problema al persistir: %w", err)
+		return domain.User{}, fmt.Errorf("registrando al usuario: %w", err)
 	}
+	return userLoad, nil
 
-	//2.4 convertimos a DTO
-	response := UserRegisterResponse{
-		ID:        userLoad.ID,
-		Email:     userLoad.Email,
-		CreatedAt: userLoad.CreatedAt,
-	}
+}
 
-	return response, nil
+// funcion helper, normalizamos el email
+func normalizeEmail(email string) string {
+	//1. Normalizamos email (eliminamos espacio y pasamos todo a minuscula)
 
+	//1.1 eliminamos espacios en blanco
+	//1.2 pasamos todo a mayucula, no diferenciamos en mayusculas y minusculas.
+	// Mario@Gmail.com y mario@gmail.com son lo mismo, mismo correo asociado a un usuario
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	return normalizedEmail
 }
