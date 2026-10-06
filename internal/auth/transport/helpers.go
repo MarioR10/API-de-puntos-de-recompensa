@@ -94,7 +94,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, data any) error {
 
 		//CASO 2: Un JSON incompleto, por ejemplo { "email": "mario@example.com } abrimos comillas pero nunca las cerramos
 		case errors.Is(err, io.ErrUnexpectedEOF):
-			msg := fmt.Sprintf("The request body is truncated halfway")
+			msg := "The request body is truncated halfway"
 			return &malformedRequest{status: http.StatusBadRequest, message: msg}
 
 		//CASO 3: Un JSON valido, pero al deserealizar los tipos no coinciden, por ejemplo: {"email": 123},email → número,

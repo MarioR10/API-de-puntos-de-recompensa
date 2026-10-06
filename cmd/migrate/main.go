@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 
 	"github.com/MarioR10/Proyecto-Go/internal/config"
@@ -20,6 +21,7 @@ func main() {
 }
 
 func run() error {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg, err := config.Load("application.yaml")
 	if err != nil {
 		return fmt.Errorf("cargando las configuraciones: %w", err)
@@ -32,7 +34,20 @@ func run() error {
 		return fmt.Errorf("abriendo una conexion: %w", err)
 	}
 	// Garantizamos que la conexión se cierre al finalizar la función, sin importar cómo termine.
-	defer db.Close()
+
+	// defer recibe una llamada a una función y pospone su ejecución hasta que run() termine.
+	// Por ejemplo, defer db.Close() le indica a Go que ejecute db.Close() al finalizar run().
+	// Como necesitamos manejar el error que devuelve db.Close(), en lugar de llamar directamente
+	// a db.Close(), hacemos que defer ejecute una función anónima que se encarga de llamar a
+	// db.Close() y manejar el posible error.
+	//
+	// func() { ... } define la función anónima y los () finales la invocan.
+	// Por eso defer puede posponer su ejecución, igual que hace con defer db.Close().
+	defer func() {
+		if err := db.Close(); err != nil {
+			logger.Error("failed to close database", "error", err)
+		}
+	}()
 
 	// Configuramos el dialecto a PostgreSQL para que Goose sepa qué sintaxis SQL
 	// utilizar en sus operaciones internas de control de versiones.

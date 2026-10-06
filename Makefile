@@ -23,4 +23,8 @@ migrate-down: #revierte la ultima migracion aplicada
 	go run ./cmd/migrate down
 migrate-status:  #muestra que migraciones estan aplicadas y cuales pendientes
 	go run ./cmd/migrate status
-.PHONY: up down ps logs run build tidy test migrate-up migrate-down migrate-status
+lint:
+	golangci-lint run
+fmt:
+	golangci-lint fmt
+.PHONY: up down ps logs run build tidy test migrate-up migrate-down migrate-status lint fmt
