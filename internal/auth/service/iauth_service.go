@@ -2,7 +2,8 @@ package service
 
 import (
 	"context"
-	"proyecto-Go/internal/auth/domain"
+
+	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
 )
 
 type IAuthService interface {

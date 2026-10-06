@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"proyecto-Go/internal/config"
-	"proyecto-Go/internal/platform/database"
+
+	"github.com/MarioR10/Proyecto-Go/internal/config"
+	"github.com/MarioR10/Proyecto-Go/internal/platform/database"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"

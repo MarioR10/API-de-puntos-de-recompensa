@@ -5,7 +5,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"proyecto-Go/internal/auth/domain"
+
+	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"

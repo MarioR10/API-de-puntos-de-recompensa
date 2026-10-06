@@ -3,8 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-	"proyecto-Go/internal/config"
 	"time"
+
+	"github.com/MarioR10/Proyecto-Go/internal/config"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

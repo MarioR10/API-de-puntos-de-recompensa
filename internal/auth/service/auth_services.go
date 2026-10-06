@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"proyecto-Go/internal/auth/domain"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
 
 	"golang.org/x/crypto/bcrypt"
 )

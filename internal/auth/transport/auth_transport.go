@@ -4,10 +4,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"proyecto-Go/internal/auth/domain"
-	"proyecto-Go/internal/auth/service"
 	"strings"
 	"time"
+
+	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
+	"github.com/MarioR10/Proyecto-Go/internal/auth/service"
 )
 
 //capa que traduce HTTP a negocio
