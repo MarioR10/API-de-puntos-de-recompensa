@@ -14,13 +14,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"proyecto-Go/internal/auth/repository"
+	"proyecto-Go/internal/auth/service"
+	"proyecto-Go/internal/auth/transport"
 	"proyecto-Go/internal/config"
 	"proyecto-Go/internal/platform/database"
-	"proyecto-Go/internal/user"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -44,11 +47,45 @@ func run() error {
 	// Cargamos la configuración desde application.yaml.
 	cfg, err := config.Load("application.yaml")
 
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	// Cuando run termine, ejecutamos stop para liberar
+	// los recursos asociados al contexto.
+	defer stop()
+
 	// Si la configuración no pudo cargarse, no podemos continuar.
 	if err != nil {
 		return fmt.Errorf("cargando configuraciones: %w", err)
 	}
 
+	//Pool de conexiones a Postgres
+	pool, err := database.NewPool(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("conectando a la base de datos: %w", err)
+	}
+	defer pool.Close() //corre al retornar run(): cierra el pool de conexiones
+	logger.Info("conectado a la base de datos")
+
+	//Creamos el repositorio que luego utiliza el servicio
+	userRepo, err := repository.NewUserRepository(pool)
+	if err != nil {
+
+		return fmt.Errorf("creando repositorio de usuario: %w", err)
+	}
+
+	cost := cfg.GetInt("bcrypt.cost")
+
+	if cost < bcrypt.MinCost || cost > bcrypt.MaxCost {
+		return fmt.Errorf("cost de: %d no esta dentro del limite establecido", cost)
+	}
+	//Creamos el servicio de auth
+	authService := service.NewAuthService(logger, userRepo, cost)
+
+	//Creamos el handler
+	authHandler := transport.NewAuthHandler(authService, logger)
 	// Creamos el router de chi.
 	// chi.Router implementa la interfaz http.Handler de Go,
 	// por lo que puede utilizarse directamente como Handler
@@ -58,6 +95,12 @@ func run() error {
 	// Registramos una ruta:  GET /health
 	// Cuando alguien haga esta petición, respondemos con HTTP 200
 	// y el texto "ok".
+	router.Route(
+		"/v1", func(r chi.Router) {
+			r.Post("/auth/register", authHandler.Register)
+
+		})
+
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -86,39 +129,6 @@ func run() error {
 	// ctx  -> contexto que será cancelado
 	// stop -> función para cancelar manualmente el contexto
 	//         y dejar de recibir señales.
-	ctx, stop := signal.NotifyContext(
-		context.Background(),
-		os.Interrupt,
-		syscall.SIGTERM,
-	)
-	// Cuando run termine, ejecutamos stop para liberar
-	// los recursos asociados al contexto.
-	defer stop()
-
-	//Pool de conexiones a Postgres
-	pool, err := database.NewPool(ctx, cfg)
-	if err != nil {
-		return fmt.Errorf("conectando a la base de datos: %w", err)
-	}
-	defer pool.Close() //corre al retornar run(): cierra el pool de conexiones
-	logger.Info("conectado a la base de datos")
-
-	// TEMPORAL: demostración de la Fase 2 (un repo ejecutando un query desde .sql).
-	//Creando el repositorio y pasandole dependencias
-
-	userRepo, err := user.NewRepository(pool)
-
-	if err != nil {
-
-		return fmt.Errorf("creando repositorio de usuario: %w", err)
-	}
-
-	total, err := userRepo.CountUsers(ctx)
-
-	if err != nil {
-		return fmt.Errorf("verificando acceso a la tabla users: %w", err)
-	}
-	logger.Info("usuarios en la base", "total", total)
 
 	// Ejecutamos ListenAndServe en una goroutine porque es un método
 	// bloqueante: mientras el servidor está funcionando, esta llamada
