@@ -11,7 +11,7 @@ import (
 )
 
 // Arma y verifica un pool de conexiones a postgres
-func NewPool(ctx context.Context, configurations config.IConfig) (*pgxpool.Pool, error) {
+func NewPool(ctx context.Context, configurations *config.Config) (*pgxpool.Pool, error) {
 
 	//Obtenemos la conexion a la base de datos
 	strconn := BuildDSN(configurations)
@@ -34,7 +34,7 @@ func NewPool(ctx context.Context, configurations config.IConfig) (*pgxpool.Pool,
 }
 
 // Metodo que arma el string connection (DSN) a partir de la config
-func BuildDSN(configurations config.IConfig) string {
+func BuildDSN(configurations *config.Config) string {
 
 	//Plantilla para la dsn
 	//La dejamos aca y no en el archivo de propiedades para no depender de una plantilla externa que alguien puede

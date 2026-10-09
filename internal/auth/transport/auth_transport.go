@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -8,24 +9,27 @@ import (
 	"time"
 
 	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
-	"github.com/MarioR10/Proyecto-Go/internal/auth/service"
 )
+
+type authService interface {
+	Register(ctx context.Context, email, password string) (domain.User, error)
+}
 
 //capa que traduce HTTP a negocio
 
 type AuthHandler struct {
-	authService service.IAuthService
+	authService authService
 	logger      *slog.Logger
 }
 
-func NewAuthHandler(authService service.IAuthService, logger *slog.Logger) *AuthHandler {
+func NewAuthHandler(authService authService, logger *slog.Logger) *AuthHandler {
 	return &AuthHandler{authService: authService, logger: logger}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	//Entidad
-	var request RegisterRequest
+	var request registerRequest
 
 	//1. Validamos el JSON body que viene el la request
 	err := decodeJSONBody(w, r, &request)
@@ -81,7 +85,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	//4. Convertimos dominio a dto de respuesta
-	responseDTO := RegisterResponse{
+	responseDTO := registerResponse{
 		ID:        user.ID,
 		Email:     user.Email,
 		CreatedAt: user.CreatedAt,
@@ -91,12 +95,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, responseDTO)
 }
 
-type RegisterRequest struct {
+type registerRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
-type RegisterResponse struct {
+type registerResponse struct {
 	ID        int64     `json:"id"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"createdAt"`

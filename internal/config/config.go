@@ -12,25 +12,18 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Abstraccion de configuraciones
-type IConfig interface {
-	GetString(path string) string
-	GetInt(path string) int
-	GetBool(path string) bool
-}
-
 // Implementacion concreta de la interfaz, envuelve el Viper
-type configImpl struct {
+type Config struct {
 	vpr *viper.Viper
 }
 
 // Cada funcion delega al viper el trabajo. Cada método es la asbtraccion, envoltorio del viper
-func (c configImpl) GetString(path string) string { return c.vpr.GetString(path) }
-func (c configImpl) GetInt(path string) int       { return c.vpr.GetInt(path) }
-func (c configImpl) GetBool(path string) bool     { return c.vpr.GetBool(path) }
+func (c *Config) GetString(path string) string { return c.vpr.GetString(path) }
+func (c *Config) GetInt(path string) int       { return c.vpr.GetInt(path) }
+func (c *Config) GetBool(path string) bool     { return c.vpr.GetBool(path) }
 
 // Metodo Load que envuelve la logica de leer el yaml inidicado y devuelve la config lista para consultar
-func Load(path string) (IConfig, error) {
+func Load(path string) (*Config, error) {
 
 	//Creamos el viper
 	vpr := viper.New()
@@ -53,5 +46,5 @@ func Load(path string) (IConfig, error) {
 		return nil, fmt.Errorf("mezclando config local: %w", err)
 	}
 
-	return configImpl{vpr: vpr}, nil
+	return &Config{vpr: vpr}, nil
 }

@@ -83,7 +83,7 @@ func run() error {
 		return fmt.Errorf("cost de: %d no esta dentro del limite establecido", cost)
 	}
 	//Creamos el servicio de auth
-	authService := service.NewAuthService(logger, userRepo, cost)
+	authService := service.NewAuthService(userRepo, cost)
 
 	//Creamos el handler
 	authHandler := transport.NewAuthHandler(authService, logger)

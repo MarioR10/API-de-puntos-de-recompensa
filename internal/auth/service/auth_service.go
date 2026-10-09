@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"unicode/utf8"
 
@@ -18,17 +17,16 @@ const (
 	maxPasswordBytes  = 72
 )
 
-type authServiceImpl struct {
-	logger     *slog.Logger
-	repository domain.IUserRepository
+type AuthService struct {
+	repository domain.UserRepository
 	cost       int
 }
 
-func NewAuthService(logger *slog.Logger, repository domain.IUserRepository, cost int) IAuthService {
-	return &authServiceImpl{logger: logger, repository: repository, cost: cost}
+func NewAuthService(repository domain.UserRepository, cost int) *AuthService {
+	return &AuthService{repository: repository, cost: cost}
 }
 
-func (s *authServiceImpl) Register(ctx context.Context, email, password string) (domain.User, error) {
+func (s *AuthService) Register(ctx context.Context, email, password string) (domain.User, error) {
 
 	//1. Normalizamos el email
 	emailNormalized := normalizeEmail(email)
