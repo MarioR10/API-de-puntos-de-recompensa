@@ -5,16 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MarioR10/Proyecto-Go/internal/config"
-
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Arma y verifica un pool de conexiones a postgres
-func NewPool(ctx context.Context, configurations *config.Config) (*pgxpool.Pool, error) {
+func NewPool(ctx context.Context, config ConfigDSN) (*pgxpool.Pool, error) {
 
 	//Obtenemos la conexion a la base de datos
-	strconn := BuildDSN(configurations)
+	strconn := BuildDSN(config)
 
 	//Crea el pool de conexiones: es perezozo, todavia no garantiza que Postgres responda
 	pool, err := pgxpool.New(ctx, strconn)
@@ -33,8 +31,8 @@ func NewPool(ctx context.Context, configurations *config.Config) (*pgxpool.Pool,
 	return pool, nil
 }
 
-// Metodo que arma el string connection (DSN) a partir de la config
-func BuildDSN(configurations *config.Config) string {
+// Metodo que arma el string connection (DSN)
+func BuildDSN(config ConfigDSN) string {
 
 	//Plantilla para la dsn
 	//La dejamos aca y no en el archivo de propiedades para no depender de una plantilla externa que alguien puede
@@ -42,12 +40,21 @@ func BuildDSN(configurations *config.Config) string {
 	connection := "host=%s port=%d user=%s password=%s dbname=%s sslmode=%s"
 
 	strconnection := fmt.Sprintf(connection,
-		configurations.GetString("database.postgres.host"),
-		configurations.GetInt("database.postgres.port"),
-		configurations.GetString("database.postgres.user"),
-		configurations.GetString("database.postgres.password"),
-		configurations.GetString("database.postgres.dbname"),
-		configurations.GetString("database.postgres.sslmode"),
+		config.Host,
+		config.Port,
+		config.User,
+		config.Password,
+		config.DBName,
+		config.SSLMode,
 	)
 	return strconnection
+}
+
+type ConfigDSN struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
 }

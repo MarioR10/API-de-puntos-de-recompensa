@@ -24,12 +24,22 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	cfg, err := config.Load("application.yaml")
 	if err != nil {
-		return fmt.Errorf("cargando las configuraciones: %w", err)
+		return fmt.Errorf("cargando la configuracion: %w", err)
+	}
+
+	//Configuraciones para la base de datos
+	parameters := database.ConfigDSN{
+		Host:     cfg.GetString("database.postgres.host"),
+		Port:     cfg.GetInt("database.postgres.port"),
+		User:     cfg.GetString("database.postgres.user"),
+		Password: cfg.GetString("database.postgres.password"),
+		DBName:   cfg.GetString("database.postgres.dbname"),
+		SSLMode:  cfg.GetString("database.postgres.sslmode"),
 	}
 
 	// Abrimos la conexión mediante la interfaz estándar (database/sql) que exige Goose,
 	// utilizando internamente el driver 'pgx' de PostgreSQL y pasando el DSN (connection string).
-	db, err := sql.Open("pgx", database.BuildDSN(cfg))
+	db, err := sql.Open("pgx", database.BuildDSN(parameters))
 	if err != nil {
 		return fmt.Errorf("abriendo una conexion: %w", err)
 	}
@@ -79,7 +89,7 @@ func run() error {
 	case "status":
 		err = goose.Status(db, "migrations")
 	default:
-		err = fmt.Errorf("comando desconocido: %q (debe de usarse up, down o status)", command)
+		err = fmt.Errorf("comando desconocido: %q (usa up, down o status)", command)
 	}
 	if err != nil {
 		return fmt.Errorf("ejecutando %q: %w", command, err)

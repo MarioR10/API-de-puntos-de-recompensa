@@ -34,7 +34,7 @@ func NewUserRepository(pool *pgxpool.Pool) (*UserRepository, error) {
 
 	//si ocurre un error lo documentamos, no es error de dominio, es error de infraestructura
 	if err != nil {
-		return nil, fmt.Errorf("construyendo el repositorio de usuarios: %w", err)
+		return nil, err
 	}
 	return &UserRepository{
 		pool:  pool,
