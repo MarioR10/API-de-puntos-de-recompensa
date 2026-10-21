@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
+	"github.com/google/uuid"
 )
 
 type authService interface {
@@ -88,7 +89,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	responseDTO := registerResponse{
 		ID:        user.ID,
 		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
+		CreatedAt: user.CreatedAt.UTC(),
 	}
 
 	//enviamos la respuesta
@@ -101,7 +102,7 @@ type registerRequest struct {
 }
 
 type registerResponse struct {
-	ID        int64     `json:"id"`
+	ID        uuid.UUID `json:"id"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"createdAt"`
 }

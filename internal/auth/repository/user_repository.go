@@ -55,6 +55,7 @@ func (repo *UserRepository) CreateUser(ctx context.Context, user domain.User) (d
 	err := repo.pool.QueryRow(
 		ctx, query,
 		//parametros que espera la querie en orden
+		user.ID,
 		user.Email,
 		user.PasswordHash,
 	).Scan( // Si no hay error previo scaneamos el resultado en nuestra variable. Si lo hay Scan entrega el error

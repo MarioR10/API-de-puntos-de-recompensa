@@ -320,7 +320,6 @@ func loadRunConfigurations(cfg *config.Config) (runConfig, error) {
 			readHeaderTimeout: readHeaderTimeout,
 			writeTimeout:      writeTimeout,
 		},
-
 	}
 	return r, nil
 }

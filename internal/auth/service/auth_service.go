@@ -8,7 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
-
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -56,7 +56,14 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (dom
 		return domain.User{}, fmt.Errorf("registrando al usuario: %w", err)
 	}
 
+	//4. Generamos el id (UUID) del usuario
+	userID, err := uuid.NewV7()
+	if err != nil {
+		return domain.User{}, fmt.Errorf("registrando al usuario: %w", err)
+	}
+
 	userDomain := domain.User{
+		ID:           userID,
 		Email:        emailNormalized,
 		PasswordHash: string(passwordHash),
 	}
