@@ -279,7 +279,23 @@ func TestAuthHandler_Register(t *testing.T) {
 				// el buffer, su posición permanece intacta.
 				bytesBody := response.Body.Bytes()
 
-				err := json.Unmarshal(bytesBody, &date)
+				//Queremos validar que campos estamos obteniendo del JSON, los almacenamos en un map
+				//las claves (string) son los nombres de los campos, los valores de estas llaves pueden tener distintos tipos (any)
+				fieldsJson := map[string]any{}
+
+				err := json.Unmarshal(bytesBody, &fieldsJson)
+				if err != nil {
+					t.Fatalf("Hubo un problema al decodificar el JSON : %s", err)
+				}
+
+				for key := range fieldsJson {
+
+					if key != "id" && key != "email" && key != "createdAt" {
+						t.Fatalf("Hay un campo inesperado en el JSON: %s", key)
+					}
+				}
+
+				err = json.Unmarshal(bytesBody, &date)
 				if err != nil {
 					t.Fatalf("Hubo un problema al decodificar el JSON : %s", err)
 
