@@ -17,6 +17,8 @@ tidy: #ordena dependencias en go.mod /go.sum
 	go mod tidy
 test: #corre todos los test de la API
 	go test ./...
+vet:
+	 go vet ./...
 migrate-up: #aplica migraciones pendientes
 	go run ./cmd/migrate up
 migrate-down: #revierte la ultima migracion aplicada
@@ -27,4 +29,4 @@ lint:
 	golangci-lint run
 fmt:
 	golangci-lint fmt
-.PHONY: up down ps logs run build tidy test migrate-up migrate-down migrate-status lint fmt
+.PHONY: up down ps logs run build tidy test vet migrate-up migrate-down migrate-status lint fmt

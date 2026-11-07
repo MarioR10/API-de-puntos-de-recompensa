@@ -1,0 +1,55 @@
+##Nombre del workflow
+name: required-validations
+
+##eventos que activan el workflow
+on:
+  #evento push
+  push:
+  #evento pull_request
+  pull_request:
+    branches: #propiedad que nos permite especificar las ramas que nos interesan para este evento (ramas de destiono del PR)
+      - main
+
+jobs: #Definimos los jobs que se ejecutan en el workflow, son trabajos concretos que se ejecutan dnetro del pipeline, conformado por steps que son operaciones necesarias para realizar dicho trabajo
+
+  #identificadores que elejimos nosotros para referirnos a cada job dentro del workflow
+  checks: #job que tiene como finalidad  verificar que la revision de los cambios evaluada compile, supere el analisis de vet y cumpla con los test definidos
+    runs-on: #Propiedad que indica el entorno donde se ejecutara el job
+      ubuntu-24.04 #el runner es el entorno que ejecuta los steps del job -> cada uno de nuestros jobs recibe su propia maquina virtual
+    steps: #lista de pasos del job que ejecuta el runner; "-" inidica un step, lo demas son propiedades del step
+      - name: Descargar Codigo Fuente
+        uses: actions/checkout@v7.0.1   #uses es una propiedad del step que le indica que accion realizar.  {propietario}/{repositorio}@{versión}, le decimos a gitHub que ejecute esta acción que ya está implementada y usa esta versión concreta.
+                                        # Esta accion trae los archivos del proyecto al directorio de trabajo del runner
+                                        #para que los siguientes steps tengan los archivos disponibles
+      - name: Configurar Go
+        uses: actions/setup-go@v7.0.0  # Prepara la versión de Go indicada en go.mod y agrega la carpeta de su ejecutable al PATH, para que los siguientes steps usen esa versión al ejecutar go.
+        with:
+         go-version-file: go.mod
+
+      - name: Compilar el proyecto
+        run:                            #Accion que le permite compilar el proyecto Go. Ahora que el rimmer tiene el codigo fuente (gracias al primer step) y el compilador adecuado (gracias al segundo step)
+                                        #toca comprobar que el proyecto compila. Aqui usamos run porque queremos ejecutar un comando en la terminal del runner
+          make build
+      - name: Ejecutar análisis estático (go vet)
+        run:  make vet               #Accion que le permite examinar el codigo para detectar construcciones sospechosa en el codigo, errores sutiles o malas practicas sintacticamente
+                                     # validas para el compilador, pero que podrian causar fallo
+
+      - name: Ejecutar pruebas
+        run: make test            #Accion que le permite ejecutar las pruebas unitarias del codigo fuente
+  lint:
+    runs-on:
+      ubuntu-24.04
+    steps:
+      - name: Descargar Codigo Fuente
+        uses: actions/checkout@v7.0.1
+
+      - name: Configurar Go
+        uses: actions/setup-go@v7.0.0  # Prepara la versión de Go indicada en go.mod y agrega la carpeta de su ejecutable al PATH, para que los siguientes steps usen esa versión al ejecutar go.
+        with:
+          go-version-file: go.mod
+
+      - name: Instalar golangci-lin
+        run:  curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.14.0  #Accion que instala golangci-lint en el runner. porque ese es el ejecutable que se ejecuta al invocarse make lint
+
+      - name: Analizar código con golangci-lint
+        run: make lint    # Accion de ejecutar make lint (analizador del codigo que reporta posibles errores)
