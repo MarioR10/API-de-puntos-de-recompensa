@@ -5,7 +5,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"proyecto-Go/internal/auth/domain"
+
+	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,29 +20,29 @@ var queryFile embed.FS
 // Implementacion concreta de la interfaz
 // Tiene dos campos: el pool de conexiones para la base de datos
 // la query a ejecutar
-type userRepositoryImpl struct {
+type UserRepository struct {
 	pool  *pgxpool.Pool
 	query string
 }
 
 // Constructor que permite crear la implementacion concreta: valida que el repositorio nazca en un estado consistente
 // valida primero que no haya error al obtener la query, si hay erro falla rapido.
-func NewUserRepository(pool *pgxpool.Pool) (domain.IUserRepository, error) {
+func NewUserRepository(pool *pgxpool.Pool) (*UserRepository, error) {
 
 	//obtenemos la query desde los archivos embebidos utilizando el metodo auxiliar
 	query, err := loadQuery("insert_user.sql")
 
 	//si ocurre un error lo documentamos, no es error de dominio, es error de infraestructura
 	if err != nil {
-		return nil, fmt.Errorf("construyendo el repositorio de usuarios: %w", err)
+		return nil, err
 	}
-	return &userRepositoryImpl{
+	return &UserRepository{
 		pool:  pool,
 		query: query}, nil
 }
 
 // funcion principal, implementa el metodo de la interfaz, sirve para crear un usuario en la base de datos
-func (repo *userRepositoryImpl) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
+func (repo *UserRepository) CreateUser(ctx context.Context, user domain.User) (domain.User, error) {
 
 	//variable donde se almacena el usuario creado
 	var userCreated domain.User
@@ -54,6 +55,7 @@ func (repo *userRepositoryImpl) CreateUser(ctx context.Context, user domain.User
 	err := repo.pool.QueryRow(
 		ctx, query,
 		//parametros que espera la querie en orden
+		user.ID,
 		user.Email,
 		user.PasswordHash,
 	).Scan( // Si no hay error previo scaneamos el resultado en nuestra variable. Si lo hay Scan entrega el error

@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
-	"proyecto-Go/internal/auth/domain"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -17,17 +17,16 @@ const (
 	maxPasswordBytes  = 72
 )
 
-type authServiceImpl struct {
-	logger     *slog.Logger
-	repository domain.IUserRepository
+type AuthService struct {
+	repository domain.UserRepository
 	cost       int
 }
 
-func NewAuthService(logger *slog.Logger, repository domain.IUserRepository, cost int) IAuthService {
-	return &authServiceImpl{logger: logger, repository: repository, cost: cost}
+func NewAuthService(repository domain.UserRepository, cost int) *AuthService {
+	return &AuthService{repository: repository, cost: cost}
 }
 
-func (s *authServiceImpl) Register(ctx context.Context, email, password string) (domain.User, error) {
+func (s *AuthService) Register(ctx context.Context, email, password string) (domain.User, error) {
 
 	//1. Normalizamos el email
 	emailNormalized := normalizeEmail(email)
@@ -57,7 +56,14 @@ func (s *authServiceImpl) Register(ctx context.Context, email, password string) 
 		return domain.User{}, fmt.Errorf("registrando al usuario: %w", err)
 	}
 
+	//4. Generamos el id (UUID) del usuario
+	userID, err := uuid.NewV7()
+	if err != nil {
+		return domain.User{}, fmt.Errorf("registrando al usuario: %w", err)
+	}
+
 	userDomain := domain.User{
+		ID:           userID,
 		Email:        emailNormalized,
 		PasswordHash: string(passwordHash),
 	}

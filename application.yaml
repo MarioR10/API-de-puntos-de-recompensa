@@ -1,6 +1,12 @@
 #Archivo base de configuraciones
 server:
   port: 8080
+  timeouts:
+    #s: segundo; m: minuto; ms: milisegundos
+    read_header: 5s
+    read: 10s
+    write: 15s
+    idle: 1m
 database:
   postgres:
     host: localhost

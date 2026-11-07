@@ -1,6 +1,6 @@
 package transport
 
-type ErrorResponse struct {
+type errorResponse struct {
 	Type     string `json:"type"`
 	Title    string `json:"title"`
 	Status   int    `json:"status"`

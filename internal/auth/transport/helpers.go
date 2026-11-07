@@ -20,7 +20,7 @@ func (e *malformedRequest) Error() string {
 }
 
 const (
-	MaxAllowedJSONSize = 1048576
+	maxAllowedJSONSize = 1048576
 )
 
 // decodeJSONBody representa una funcion helper, que nos ayuda con las validaciones de decodificacion del JSON body
@@ -50,7 +50,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, data any) error {
 
 	//2. Aca estamos reasignando el objeto que lee los bytes del body del request HTTP entrante
 	//  le decimos:  Toma el lector que ya tenía r.Body y reemplázalo por otro lector que impone un límite de MaxAllowedJSONSize y ocupa ese para leer los bytes
-	r.Body = http.MaxBytesReader(w, r.Body, MaxAllowedJSONSize)
+	r.Body = http.MaxBytesReader(w, r.Body, maxAllowedJSONSize)
 
 	//3. Comenzamos el proceso de Deserializar
 
@@ -94,7 +94,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, data any) error {
 
 		//CASO 2: Un JSON incompleto, por ejemplo { "email": "mario@example.com } abrimos comillas pero nunca las cerramos
 		case errors.Is(err, io.ErrUnexpectedEOF):
-			msg := fmt.Sprintf("The request body is truncated halfway")
+			msg := "The request body is truncated halfway"
 			return &malformedRequest{status: http.StatusBadRequest, message: msg}
 
 		//CASO 3: Un JSON valido, pero al deserealizar los tipos no coinciden, por ejemplo: {"email": 123},email → número,
@@ -146,7 +146,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, data any) error {
 // writeProblem es una funcion que representa lo que se le manda al cliente cuando ocurre un error en la peticion HTTP
 func writeProblem(w http.ResponseWriter, status int, details string) {
 
-	problemResponse := ErrorResponse{
+	problemResponse := errorResponse{
 		Type:   "about:blank",
 		Title:  http.StatusText(status),
 		Status: status,
