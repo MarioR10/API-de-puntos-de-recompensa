@@ -55,7 +55,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.TrimSpace(request.Email) == "" {
-		msg := "The email is required to log in"
+		msg := "the email is required to log in"
 		writeProblem(w, http.StatusBadRequest, msg)
 		return
 	}

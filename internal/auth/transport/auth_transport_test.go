@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -382,7 +383,7 @@ func TestAuthHandler_Register(t *testing.T) {
 func TestAuthHandler_Login(t *testing.T) {
 
 	validBody := `{"email": "mariotest@gmail.com", "password": "1234567"}`
-	//Error utilizado para que el reader falle al leer el body
+	dummyErr := errors.New("error")
 	test := []struct {
 		name            string
 		email           string
@@ -392,7 +393,6 @@ func TestAuthHandler_Login(t *testing.T) {
 		wantCode        int
 		wantCalled      bool
 		wantContentType string
-		wantResponse    registerResponse
 		wantProblem     errorResponse
 		bodyReader      io.Reader
 		serverErr       error
@@ -406,6 +406,90 @@ func TestAuthHandler_Login(t *testing.T) {
 			wantCode:        http.StatusNoContent,
 			wantCalled:      true,
 			wantContentType: "",
+		},
+		{
+			name:        "Invalid credentials",
+			email:       "mariotest@gmail.com",
+			password:    "1234567",
+			contentType: "application/json",
+			body:        validBody,
+			wantCode:    http.StatusBadRequest,
+			wantCalled:  true,
+			wantProblem: errorResponse{
+				Type:   "about:blank",
+				Title:  http.StatusText(http.StatusBadRequest),
+				Status: 400,
+				Detail: "Bad credentials",
+			},
+			wantContentType: "application/problem+json",
+			serverErr:       fmt.Errorf("error en el login %w", domain.ErrInvalidCredentials),
+		},
+		{
+			name:        "general error",
+			email:       "mariotest@gmail.com",
+			password:    "1234567",
+			contentType: "application/json",
+			body:        validBody,
+			wantCode:    http.StatusInternalServerError,
+			wantCalled:  true,
+			wantProblem: errorResponse{
+				Type:   "about:blank",
+				Title:  http.StatusText(http.StatusInternalServerError),
+				Status: 500,
+				Detail: "An unexpected error occurred on our end. Please try again",
+			},
+			wantContentType: "application/problem+json",
+			serverErr:       fmt.Errorf("mientras se iniciaba sesion: %w", dummyErr),
+		},
+		{
+			name:        "empty email",
+			email:       "",
+			password:    "1234567",
+			contentType: "application/json",
+			body:        `{"email": "", "password": "1234567"}`,
+			wantCode:    http.StatusBadRequest,
+			wantCalled:  false,
+			wantProblem: errorResponse{
+				Type:   "about:blank",
+				Title:  http.StatusText(http.StatusBadRequest),
+				Status: 400,
+				Detail: "the email is required to log in",
+			},
+			wantContentType: "application/problem+json",
+			serverErr:       nil,
+		},
+		{
+			name:        "empty password",
+			email:       "mariotest@gmail.com",
+			password:    "",
+			contentType: "application/json",
+			body:        `{"email": "mariotest@gmail.com", "password": ""}`,
+			wantCode:    http.StatusBadRequest,
+			wantCalled:  false,
+			wantProblem: errorResponse{
+				Type:   "about:blank",
+				Title:  http.StatusText(http.StatusBadRequest),
+				Status: 400,
+				Detail: "the password is required to log in",
+			},
+			wantContentType: "application/problem+json",
+			serverErr:       nil,
+		},
+		{
+			name:        "invalid content-type",
+			contentType: "application/jsonnnn",
+			body:        validBody,
+			wantCode:  http.StatusUnsupportedMediaType,
+			wantCalled: false,
+			wantProblem: errorResponse{
+				Type:   "about:blank",
+				Title:  http.StatusText(http.StatusUnsupportedMediaType),
+				Status: 415,
+				Detail: "Content-Type header differs from application/json",
+			},
+			wantContentType: "application/problem+json",
+			serverErr:       nil,
+
 		},
 	}
 
@@ -454,12 +538,16 @@ func TestAuthHandler_Login(t *testing.T) {
 				t.Fatalf("se obtuvo %v, y se esperaba: %v", response.Header().Get("Content-Type"), tt.wantContentType)
 			}
 
-			if serviceMock.email != tt.email {
-				t.Fatalf("se obtuvo %v, y se esperaba %v", serviceMock.email, tt.email)
-			}
+			if tt.wantCalled {
 
-			if serviceMock.password != tt.password {
-				t.Fatalf("se obtuvo %v, y se esperaba %v", serviceMock.password, tt.password)
+				if serviceMock.email != tt.email {
+					t.Fatalf("se obtuvo %v, y se esperaba %v", serviceMock.email, tt.email)
+				}
+
+				if serviceMock.password != tt.password {
+					t.Fatalf("se obtuvo %v, y se esperaba %v", serviceMock.password, tt.password)
+				}
+
 			}
 
 			if tt.wantCode == http.StatusNoContent {
@@ -469,6 +557,21 @@ func TestAuthHandler_Login(t *testing.T) {
 				return
 			}
 
+			errResponse := &errorResponse{}
+			err := json.NewDecoder(response.Body).Decode(errResponse)
+			if err != nil {
+				t.Fatalf("Hubo un problema al decodificar el JSON : %s", err)
+			}
+
+			if errResponse.Detail != tt.wantProblem.Detail {
+				t.Fatalf("Se obtuvo %v, y se esperaba %v", errResponse.Detail, tt.wantProblem.Detail)
+			}
+
+			if errResponse.Status != tt.wantCode {
+				t.Fatalf("Se obtuvo %v, y se esperaba %v", errResponse.Status, tt.wantCode)
+
+			}
 		})
+
 	}
 }
