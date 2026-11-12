@@ -19,9 +19,11 @@ import (
 )
 
 type MockUserService struct {
-	err    error
-	user   domain.User
-	called bool
+	err      error
+	user     domain.User
+	called   bool
+	email    string
+	password string
 }
 
 func (m *MockUserService) Register(ctx context.Context, email, password string) (domain.User, error) {
@@ -31,6 +33,18 @@ func (m *MockUserService) Register(ctx context.Context, email, password string) 
 		return domain.User{}, m.err
 	}
 	return m.user, nil
+}
+
+func (m *MockUserService) Login(ctx context.Context, email, password string) error {
+
+	m.called = true
+	m.email = email
+	m.password = password
+
+	if m.err != nil {
+		return m.err
+	}
+	return nil
 }
 
 func TestAuthHandler_Register(t *testing.T) {
@@ -359,6 +373,100 @@ func TestAuthHandler_Register(t *testing.T) {
 					t.Fatalf("Se espera el codigo: %d", tt.wantProblem.Status)
 
 				}
+			}
+
+		})
+	}
+}
+
+func TestAuthHandler_Login(t *testing.T) {
+
+	validBody := `{"email": "mariotest@gmail.com", "password": "1234567"}`
+	//Error utilizado para que el reader falle al leer el body
+	test := []struct {
+		name            string
+		email           string
+		password        string
+		contentType     string
+		body            string
+		wantCode        int
+		wantCalled      bool
+		wantContentType string
+		wantResponse    registerResponse
+		wantProblem     errorResponse
+		bodyReader      io.Reader
+		serverErr       error
+	}{
+		{
+			name:            "Login success",
+			email:           "mariotest@gmail.com",
+			password:        "1234567",
+			contentType:     "application/json",
+			body:            validBody,
+			wantCode:        http.StatusNoContent,
+			wantCalled:      true,
+			wantContentType: "",
+		},
+	}
+
+	for _, tt := range test {
+
+		t.Run(tt.name, func(t *testing.T) {
+
+			//Configuraciones iniciales
+
+			//1. Creamos el reader
+			reader := strings.NewReader(tt.body)
+
+			//2. Creamos la request
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/v1/auth/login",
+				reader,
+			)
+
+			//3. Asiganamos headers
+			if tt.contentType != "" {
+				request.Header.Set("Content-Type", tt.contentType)
+			}
+
+			//Creamos el recoder que escribira la respuesta
+			response := httptest.NewRecorder()
+
+			//Creacion de dependencias que ocupa el servicio
+			logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+			serviceMock := &MockUserService{
+				err: tt.serverErr,
+			}
+			handler := NewAuthHandler(serviceMock, logger)
+			handler.Login(response, request)
+
+			//Validaciones para el caso login
+			if response.Code != tt.wantCode {
+				t.Fatalf("code obtenido %v, se esperaba: %v", response.Code, tt.wantCode)
+			}
+
+			if serviceMock.called != tt.wantCalled {
+				t.Fatalf("se obtuvo %v al llamdo, se esperava %v", serviceMock.called, tt.wantCalled)
+			}
+
+			if response.Header().Get("Content-Type") != tt.wantContentType {
+				t.Fatalf("se obtuvo %v, y se esperaba: %v", response.Header().Get("Content-Type"), tt.wantContentType)
+			}
+
+			if serviceMock.email != tt.email {
+				t.Fatalf("se obtuvo %v, y se esperaba %v", serviceMock.email, tt.email)
+			}
+
+			if serviceMock.password != tt.password {
+				t.Fatalf("se obtuvo %v, y se esperaba %v", serviceMock.password, tt.password)
+			}
+
+			if tt.wantCode == http.StatusNoContent {
+				if response.Body.Len() != 0 {
+					t.Fatal("se esperaba un body vacio")
+				}
+				return
 			}
 
 		})

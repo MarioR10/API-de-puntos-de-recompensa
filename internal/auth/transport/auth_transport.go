@@ -14,6 +14,7 @@ import (
 
 type authService interface {
 	Register(ctx context.Context, email, password string) (domain.User, error)
+	Login(ctx context.Context, email, password string) error
 }
 
 //capa que traduce HTTP a negocio
@@ -27,9 +28,61 @@ func NewAuthHandler(authService authService, logger *slog.Logger) *AuthHandler {
 	return &AuthHandler{authService: authService, logger: logger}
 }
 
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	//request
+	var request loginRequest
+
+	//1. validamos el JSON body que viene la request
+	err := decodeJSONBody(w, r, &request)
+
+	//1.1 Validamos que el error que devuelve sea del tipo que manejamos en la funcion helper
+	//    si es asi, copiamos el contenido en dicha variable, para poder manejar sus datos, mensaje y status
+	if err != nil {
+		var mr *malformedRequest
+		if errors.As(err, &mr) {
+			writeProblem(w, mr.status, mr.message)
+			return
+		}
+		h.logger.ErrorContext(r.Context(), "Ocurrio un error al decodificar el body del request ", "error", err.Error())
+		writeProblem(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		return
+	}
+
+	//2. Validamos que los campos que vienen en la request no sean vacios //preguntar si es correcto
+	if strings.TrimSpace(request.Password) == "" {
+		msg := "the password is required to log in"
+		writeProblem(w, http.StatusBadRequest, msg)
+		return
+	}
+	if strings.TrimSpace(request.Email) == "" {
+		msg := "The email is required to log in"
+		writeProblem(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	//3. Llamamos al servicio
+	err = h.authService.Login(r.Context(), request.Email, request.Password)
+
+	if errors.Is(err, domain.ErrInvalidCredentials) {
+		msg := "Bad credentials"
+		writeProblem(w, http.StatusBadRequest, msg)
+		return
+	}
+
+	if err != nil {
+		h.logger.ErrorContext(r.Context(), "Ocurrio un error en la llamada al servicio ", "error", err.Error())
+		msg := "An unexpected error occurred on our end. Please try again"
+		writeProblem(w, http.StatusInternalServerError, msg)
+		return
+
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+	return
+}
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
-	//Entidad
+	//Request
 	var request registerRequest
 
 	//1. Validamos el JSON body que viene el la request
@@ -48,7 +101,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//2. Validamos que los campos que vienen en la request no sean vacios //preguntar si es correcto
+	//2. Validamos que los campos que vienen en la request no sean vacios
 	if strings.TrimSpace(request.Password) == "" {
 		msg := "when registering, the password field is required"
 		writeProblem(w, http.StatusBadRequest, msg)
@@ -105,4 +158,9 @@ type registerResponse struct {
 	ID        uuid.UUID `json:"id"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"createdAt"`
+}
+
+type loginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }

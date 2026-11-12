@@ -79,14 +79,14 @@ func run() error {
 	logger.Info("conectado a la base de datos")
 
 	//6. Creacion del repositorio que conecta a la abse de datos
-	userRepo, err := repository.NewUserRepository(pool)
-	if err != nil {
-
-		return fmt.Errorf("creando repositorio de usuario: %w", err)
-	}
+	userRepo := repository.NewUserRepository(pool)
 
 	//7. Creacion del servicio de autenticacion
-	authService := service.NewAuthService(userRepo, configurations.bcryptCost)
+	authService, err := service.NewAuthService(userRepo, configurations.bcryptCost)
+
+	if err != nil{
+		return fmt.Errorf("creando servicio de autenticación: %w", err)
+	}
 
 	//8. Creacion del handler del servicio de autenticacion
 	authHandler := transport.NewAuthHandler(authService, logger)
@@ -102,6 +102,7 @@ func run() error {
 	router.Route(
 		"/v1", func(r chi.Router) {
 			r.Post("/auth/register", authHandler.Register)
+			r.Post("/auth/login", authHandler.Login)
 
 		})
 

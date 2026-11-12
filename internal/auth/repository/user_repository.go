@@ -2,43 +2,39 @@ package repository
 
 import (
 	"context"
-	"embed"
 	"errors"
 	"fmt"
 
 	"github.com/MarioR10/Proyecto-Go/internal/auth/domain"
+	"github.com/jackc/pgx/v5"
+
+	_ "embed"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // variable por la cual podemos acceder a los archivos .sql embebidos
-//
-//go:embed queries/*.sql
-var queryFile embed.FS
+var (
+	//go:embed queries/insert_user.sql
+	sqlInsertUser string
+
+	//go:embed queries/find_user_by_email.sql
+	sqlFindUser string
+)
 
 // Implementacion concreta de la interfaz
 // Tiene dos campos: el pool de conexiones para la base de datos
 // la query a ejecutar
 type UserRepository struct {
 	pool  *pgxpool.Pool
-	query string
 }
 
-// Constructor que permite crear la implementacion concreta: valida que el repositorio nazca en un estado consistente
-// valida primero que no haya error al obtener la query, si hay erro falla rapido.
-func NewUserRepository(pool *pgxpool.Pool) (*UserRepository, error) {
+// Constructor que permite crear la implementacion concreta
+func NewUserRepository(pool *pgxpool.Pool) (*UserRepository) {
 
-	//obtenemos la query desde los archivos embebidos utilizando el metodo auxiliar
-	query, err := loadQuery("insert_user.sql")
-
-	//si ocurre un error lo documentamos, no es error de dominio, es error de infraestructura
-	if err != nil {
-		return nil, err
-	}
 	return &UserRepository{
-		pool:  pool,
-		query: query}, nil
+		pool: pool}
 }
 
 // funcion principal, implementa el metodo de la interfaz, sirve para crear un usuario en la base de datos
@@ -47,7 +43,8 @@ func (repo *UserRepository) CreateUser(ctx context.Context, user domain.User) (d
 	//variable donde se almacena el usuario creado
 	var userCreated domain.User
 	//1. obtenemos la query previamente cargada
-	query := repo.query
+	query := sqlInsertUser
+
 	//2. Obtenemos el pool de conexiones y ejecutamos la consulta
 	// QueryRow no devuelve error: guarda dentro del Row cualquier fallo (pool, red, rechazo
 	// de Postgres o Scan) y es Scan quien lo entrega. Por eso este único err puede ser un
@@ -82,10 +79,37 @@ func (repo *UserRepository) CreateUser(ctx context.Context, user domain.User) (d
 	return userCreated, nil
 }
 
-func loadQuery(name string) (string, error) {
-	query, err := queryFile.ReadFile("queries/" + name)
-	if err != nil {
-		return "", fmt.Errorf("cargando el query %q: %w", name, err)
+func (repo *UserRepository) FindByEmail(ctx context.Context, email string) (domain.User, error) {
+
+	//1. variable que representa el usuario encontrado
+	var userFound domain.User
+
+	//2. obtenemos la query
+	query := sqlFindUser
+
+	//3. Abrimos la conexion con la base de datos
+	err := repo.pool.QueryRow(
+		//Parametros que espera la query
+		ctx,
+		query,
+		email).Scan(
+		//Donde almacenamos el reusltado, siempre tener cuidaod en el orden
+		&userFound.ID,
+		&userFound.Email,
+		&userFound.PasswordHash,
+		&userFound.CreatedAt,
+	)
+
+	//Validamos el tipo de error recibido
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.User{}, fmt.Errorf("al consultar por el usuario: %w", domain.ErrUserNotFound)
 	}
-	return string(query), nil
+
+	//Para cualquier otro error
+	if err != nil {
+		return domain.User{}, fmt.Errorf("al consultar por el usuario: %w", err)
+	}
+
+	return userFound, nil
+
 }
