@@ -63,18 +63,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	//3. Llamamos al servicio
 	err = h.authService.Login(r.Context(), request.Email, request.Password)
 
-	if errors.Is(err, domain.ErrInvalidCredentials) {
-		msg := "Bad credentials"
-		writeProblem(w, http.StatusBadRequest, msg)
-		return
-	}
-
 	if err != nil {
-		h.logger.ErrorContext(r.Context(), "Ocurrio un error en la llamada al servicio ", "error", err.Error())
-		msg := "An unexpected error occurred on our end. Please try again"
-		writeProblem(w, http.StatusInternalServerError, msg)
+		h.writeServiceError(r.Context(), w, err)
 		return
-
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -104,6 +95,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	//2. Validamos que los campos que vienen en la request no sean vacios
 	if strings.TrimSpace(request.Password) == "" {
 		msg := "when registering, the password field is required"
+
 		writeProblem(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -117,26 +109,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	user, err := h.authService.Register(r.Context(), request.Email, request.Password)
 
 	if err != nil {
-
-		switch {
-		case errors.Is(err, domain.ErrEmailAlreadyExists):
-			msg := "The email address is already in use. Please try another one"
-			writeProblem(w, http.StatusConflict, msg)
-			return
-		case errors.Is(err, domain.ErrPasswordTooLong):
-			msg := "The password exceeds the maximum allowed length"
-			writeProblem(w, http.StatusBadRequest, msg)
-			return
-		case errors.Is(err, domain.ErrPasswordTooShort):
-			msg := "The password is shorter than the minimum required length"
-			writeProblem(w, http.StatusBadRequest, msg)
-			return
-		default:
-			h.logger.ErrorContext(r.Context(), "Ocurrio un error en la llamada al servicio ", "error", err.Error())
-			msg := "An unexpected error occurred on our end. Please try again"
-			writeProblem(w, http.StatusInternalServerError, msg)
-			return
-		}
+		h.writeServiceError(r.Context(), w, err)
+		return
 	}
 	//4. Convertimos dominio a dto de respuesta
 	responseDTO := registerResponse{
@@ -149,6 +123,38 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, responseDTO)
 }
 
+// funcion que nos ayuda a estandarizar lo que mandamos cuando es un error generico
+func (h *AuthHandler) writeGeneralError(ctx context.Context, w http.ResponseWriter, err error) {
+	h.logger.ErrorContext(ctx, "Ocurrio un error en la llamada al servicio ", "error", err.Error())
+	msg := "An unexpected error occurred on our end. Please try again"
+	writeProblem(w, http.StatusInternalServerError, msg)
+}
+
+//funcion que nos permite traducir decisiones del servicio (errores) a HTTP
+func (h *AuthHandler) writeServiceError(ctx context.Context, w http.ResponseWriter, err error){
+
+	//Seleccionamos a que caso pertenece el error
+	switch {
+	case errors.Is(err, domain.ErrEmailAlreadyExists):
+		msg := "The email address is already in use. Please try another one"
+		writeProblem(w, http.StatusConflict, msg)
+		return
+	case errors.Is(err, domain.ErrPasswordTooLong):
+		msg := "The password exceeds the maximum allowed length"
+		writeProblem(w, http.StatusBadRequest, msg)
+		return
+	case errors.Is(err, domain.ErrPasswordTooShort):
+		msg := "The password is shorter than the minimum required length"
+		writeProblem(w, http.StatusBadRequest, msg)
+		return
+	case errors.Is(err, domain.ErrInvalidCredentials):
+		msg:= "Bad credentials"
+		writeProblem(w,http.StatusBadRequest, msg)
+	default:
+		h.writeGeneralError(ctx, w, err)
+		return
+	}
+}
 type registerRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

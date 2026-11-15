@@ -84,7 +84,7 @@ func run() error {
 	//7. Creacion del servicio de autenticacion
 	authService, err := service.NewAuthService(userRepo, configurations.bcryptCost)
 
-	if err != nil{
+	if err != nil {
 		return fmt.Errorf("creando servicio de autenticación: %w", err)
 	}
 
