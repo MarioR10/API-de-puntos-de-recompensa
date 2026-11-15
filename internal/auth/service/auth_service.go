@@ -105,7 +105,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) error {
 	if errors.Is(err, domain.ErrUserNotFound) {
 		//Si entramos en este caso, ocupamos el hash de referencia para hacer la comparacion junto a la contraseña recibida y no terminar directamente
 		//independientemente de la comparacion, devolvemos credenciales invalidas
-		_= bcrypt.CompareHashAndPassword([]byte(s.referenceHash),[]byte(password))
+		_ = bcrypt.CompareHashAndPassword([]byte(s.referenceHash), []byte(password))
 
 		//siempre al salir en este caso retornamos error
 		return fmt.Errorf("mientras se iniciaba sesion: %w", domain.ErrInvalidCredentials)

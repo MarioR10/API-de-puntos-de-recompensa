@@ -20,16 +20,17 @@ import (
 )
 
 type MockUserService struct {
-	err      error
-	user     domain.User
-	called   bool
-	email    string
-	password string
+	err            error
+	user           domain.User
+	calledRegister bool
+	calledLogin    bool
+	email          string
+	password       string
 }
 
 func (m *MockUserService) Register(ctx context.Context, email, password string) (domain.User, error) {
 
-	m.called = true
+	m.calledRegister = true
 	if m.err != nil {
 		return domain.User{}, m.err
 	}
@@ -38,7 +39,7 @@ func (m *MockUserService) Register(ctx context.Context, email, password string) 
 
 func (m *MockUserService) Login(ctx context.Context, email, password string) error {
 
-	m.called = true
+	m.calledLogin = true
 	m.email = email
 	m.password = password
 
@@ -268,8 +269,8 @@ func TestAuthHandler_Register(t *testing.T) {
 				t.Fatalf("code  %v, se espera un %v", response.Code, tt.wantCode)
 			}
 
-			if serviceMock.called != tt.wantCalled {
-				t.Fatalf("servicio llamado = %v, se esperaba %v", serviceMock.called, tt.wantCalled)
+			if serviceMock.calledRegister != tt.wantCalled {
+				t.Fatalf("servicio llamado = %v, se esperaba %v", serviceMock.calledRegister, tt.wantCalled)
 			}
 
 			if response.Header().Get("content-type") != tt.wantContentType {
@@ -479,8 +480,8 @@ func TestAuthHandler_Login(t *testing.T) {
 			name:        "invalid content-type",
 			contentType: "application/jsonnnn",
 			body:        validBody,
-			wantCode:  http.StatusUnsupportedMediaType,
-			wantCalled: false,
+			wantCode:    http.StatusUnsupportedMediaType,
+			wantCalled:  false,
 			wantProblem: errorResponse{
 				Type:   "about:blank",
 				Title:  http.StatusText(http.StatusUnsupportedMediaType),
@@ -489,7 +490,6 @@ func TestAuthHandler_Login(t *testing.T) {
 			},
 			wantContentType: "application/problem+json",
 			serverErr:       nil,
-
 		},
 	}
 
@@ -530,8 +530,8 @@ func TestAuthHandler_Login(t *testing.T) {
 				t.Fatalf("code obtenido %v, se esperaba: %v", response.Code, tt.wantCode)
 			}
 
-			if serviceMock.called != tt.wantCalled {
-				t.Fatalf("se obtuvo %v al llamdo, se esperava %v", serviceMock.called, tt.wantCalled)
+			if serviceMock.calledLogin != tt.wantCalled {
+				t.Fatalf("se obtuvo %v al llamdo, se esperava %v", serviceMock.calledLogin, tt.wantCalled)
 			}
 
 			if response.Header().Get("Content-Type") != tt.wantContentType {
@@ -565,6 +565,16 @@ func TestAuthHandler_Login(t *testing.T) {
 
 			if errResponse.Detail != tt.wantProblem.Detail {
 				t.Fatalf("Se obtuvo %v, y se esperaba %v", errResponse.Detail, tt.wantProblem.Detail)
+			}
+
+			if errResponse.Type != tt.wantProblem.Type {
+				t.Fatalf("Se obtuvo %v, y se esperaba %v", errResponse.Type, tt.wantProblem.Type)
+
+			}
+
+			if errResponse.Title != tt.wantProblem.Title {
+				t.Fatalf("Se obtuvo %v, y se esperaba %v", errResponse.Title, tt.wantProblem.Title)
+
 			}
 
 			if errResponse.Status != tt.wantCode {

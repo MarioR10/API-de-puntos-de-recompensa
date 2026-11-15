@@ -27,11 +27,11 @@ var (
 // Tiene dos campos: el pool de conexiones para la base de datos
 // la query a ejecutar
 type UserRepository struct {
-	pool  *pgxpool.Pool
+	pool *pgxpool.Pool
 }
 
 // Constructor que permite crear la implementacion concreta
-func NewUserRepository(pool *pgxpool.Pool) (*UserRepository) {
+func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 
 	return &UserRepository{
 		pool: pool}

@@ -69,7 +69,6 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
-	return
 }
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
@@ -130,8 +129,8 @@ func (h *AuthHandler) writeGeneralError(ctx context.Context, w http.ResponseWrit
 	writeProblem(w, http.StatusInternalServerError, msg)
 }
 
-//funcion que nos permite traducir decisiones del servicio (errores) a HTTP
-func (h *AuthHandler) writeServiceError(ctx context.Context, w http.ResponseWriter, err error){
+// funcion que nos permite traducir decisiones del servicio (errores) a HTTP
+func (h *AuthHandler) writeServiceError(ctx context.Context, w http.ResponseWriter, err error) {
 
 	//Seleccionamos a que caso pertenece el error
 	switch {
@@ -148,13 +147,14 @@ func (h *AuthHandler) writeServiceError(ctx context.Context, w http.ResponseWrit
 		writeProblem(w, http.StatusBadRequest, msg)
 		return
 	case errors.Is(err, domain.ErrInvalidCredentials):
-		msg:= "Bad credentials"
-		writeProblem(w,http.StatusBadRequest, msg)
+		msg := "Bad credentials"
+		writeProblem(w, http.StatusBadRequest, msg)
 	default:
 		h.writeGeneralError(ctx, w, err)
 		return
 	}
 }
+
 type registerRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`

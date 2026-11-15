@@ -344,12 +344,12 @@ func TestAuthService_Login(t *testing.T) {
 			wantCalled:    true,
 		},
 		{
-			name:      "Using the reference hash",
-			email:     "  Mariojose@Gmail.com",
-			wantEmail: "mariojose@gmail.com",
-			password: passwordReferenceHash,
-			repoErr: domain.ErrUserNotFound,
-			wantErr: domain.ErrInvalidCredentials,
+			name:       "Using the reference hash",
+			email:      "  Mariojose@Gmail.com",
+			wantEmail:  "mariojose@gmail.com",
+			password:   passwordReferenceHash,
+			repoErr:    domain.ErrUserNotFound,
+			wantErr:    domain.ErrInvalidCredentials,
 			wantCalled: true,
 		},
 	}
