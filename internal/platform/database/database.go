@@ -2,10 +2,17 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+const (
+	minPortAccepted = 1
+	maxPortAccepted = 65535
 )
 
 // Arma y verifica un pool de conexiones a postgres
@@ -57,4 +64,61 @@ type ConfigDSN struct {
 	Password string
 	DBName   string
 	SSLMode  string
+}
+
+//Nos permite tener centralizada las validaciones de los parametros que nos permiten abrir conexiones con postgreSQL
+
+func (c ConfigDSN) ValidateDatabaseParameters() error {
+
+	//1.Creamos el slice donde vamos almacenar errores de configuraciones
+	var errs []error
+
+	//2.Validamos todas las configuraciones, antes de asignarlas a los structs correspondientes [ETAPA: Validacion]
+	err := validateParameterDatabase(c.Host, "host")
+	if err != nil {
+		errs = append(errs, err)
+	}
+	err = validatePort(c.Port, "port")
+	if err != nil {
+		errs = append(errs, err)
+	}
+	err = validateParameterDatabase(c.User, "user")
+	if err != nil {
+		errs = append(errs, err)
+	}
+	err = validateParameterDatabase(c.Password, "password")
+	if err != nil {
+		errs = append(errs, err)
+	}
+	err = validateParameterDatabase(c.DBName, "DBName")
+	if err != nil {
+		errs = append(errs, err)
+	}
+	err = validateParameterDatabase(c.SSLMode, "SSLMode")
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	//Unimos(envolvemos) todos los errores que salieron durante el proceso en un solo error, si no es nil devolvemos el error [ETAPA: DECISION]
+	//De esta forman devolvemos la unidad y luego podemos comparar donde necesitemos validar, con  errors.Is o .As
+	errJoin := errors.Join(errs...)
+	if errJoin != nil {
+		return errJoin
+	} //si todos son nil, entonces errJoin es nil
+
+	return nil
+}
+
+func validateParameterDatabase(value, parameter string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("el %s no debe ser vacio", parameter)
+	}
+	return nil
+}
+
+func validatePort(value int, parameter string) error {
+	if value < minPortAccepted || value > maxPortAccepted {
+		return fmt.Errorf(" el %s vale: %v debe estar entre %v y %v", parameter, value, minPortAccepted, maxPortAccepted)
+	}
+	return nil
 }

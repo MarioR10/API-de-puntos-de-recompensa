@@ -37,14 +37,19 @@ func run() error {
 		SSLMode:  cfg.GetString("database.postgres.sslmode"),
 	}
 
+	err = parameters.ValidateDatabaseParameters()
+	if err != nil {
+		return fmt.Errorf("validando los parametros de la base de datos: %w", err)
+	}
+
 	// Abrimos la conexión mediante la interfaz estándar (database/sql) que exige Goose,
 	// utilizando internamente el driver 'pgx' de PostgreSQL y pasando el DSN (connection string).
 	db, err := sql.Open("pgx", database.BuildDSN(parameters))
 	if err != nil {
 		return fmt.Errorf("abriendo una conexion: %w", err)
 	}
-	// Garantizamos que la conexión se cierre al finalizar la función, sin importar cómo termine.
 
+	// Garantizamos que la conexión se cierre al finalizar la función, sin importar cómo termine.
 	// defer recibe una llamada a una función y pospone su ejecución hasta que run() termine.
 	// Por ejemplo, defer db.Close() le indica a Go que ejecute db.Close() al finalizar run().
 	// Como necesitamos manejar el error que devuelve db.Close(), en lugar de llamar directamente

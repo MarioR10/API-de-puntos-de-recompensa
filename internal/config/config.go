@@ -13,7 +13,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-const nameFile = "application-local.yaml"
+const (
+	nameFile        = "application-local.yaml"
+	minPortAccepted = 1
+	maxPortAccepted = 65535
+)
 
 // Implementacion concreta de la interfaz, envuelve el Viper
 type Config struct {
@@ -51,4 +55,12 @@ func Load(path string) (*Config, error) {
 	}
 
 	return &Config{vpr: vpr}, nil
+}
+
+func LoadPort(cfg *Config, path string) (int, error) {
+	port := cfg.GetInt(path)
+	if port < minPortAccepted || port > maxPortAccepted {
+		return 0, fmt.Errorf("%q vale %v, debe estar entre %v y %v", path, port, minPortAccepted, maxPortAccepted)
+	}
+	return port, nil
 }

@@ -1,9 +1,3 @@
-// Command api es el punto de entrada del binario del servidor de la API.
-//
-// En la Fase 0 esto es solo un esqueleto que compila: nos da un binario
-// ejecutable y confirma que el módulo está bien armado. En la Fase 1, este
-// mismo main pasará a: cargar la configuración (paquete config), inicializar
-// el logger (slog) y arrancar el servidor HTTP (chi) con graceful shutdown.
 package main
 
 import (
@@ -14,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -29,13 +22,11 @@ import (
 
 const (
 	minTimeOutValue = 1 * time.Second
-	minPortAccepted = 1
-	maxPortAccepted = 65535
 )
 
 func main() {
 
-	//main minimo: llama a la funcion run(), si algo falla loguea y sale
+	// main ejecuta run. Si recibe un error, lo registra y sale con código 1.
 	if err := run(); err != nil {
 		slog.Error("error fatal", "error", err)
 		os.Exit(1)
@@ -43,34 +34,35 @@ func main() {
 }
 
 func run() error {
-	// 1. Creacion de LOGGER que escribe los logs en formato JSON
+
+	// Configuramos slog para escribir logs JSON en stdout por defecto.
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	// Establecemos este logger como el logger predeterminado
 	slog.SetDefault(logger)
 
-	// 2. Carga de configuraciones  desde application.yaml.
+	// Leemos la configuración desde application.yaml.
 	cfg, err := config.Load("application.yaml")
-	// Si la configuración no pudo cargarse, no podemos continuar.
 	if err != nil {
 		return fmt.Errorf("cargando las configuraciones: %w", err)
 	}
 
-	//3. Creacion de contexto, implementando graceful shutdown
+	// Creamos ctx para detectar cuándo se solicita el apagado del proceso.
+	// os.Interrupt llega con Ctrl+C. SIGTERM se usa, por ejemplo, al detener o reiniciar un contenedor de Docker.
+	// NotifyContext cancela ctx al recibir una de esas señales. Eso cierra ctx.Done() y permite que run continúe y llame a Shutdown.
+	// stop() nos permite cancelar ctx desde el código y dejar de recibir  notificaciones de os.Interrupt y SIGTERM para este contexto.
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
 		syscall.SIGTERM,
 	)
-	// Cuando run termine, ejecutamos stop para liberar los recursos asociados al contexto.
-	defer stop()
+	defer stop() // Cuando run termine, ejecutamos stop para liberar los recursos asociados al contexto.
 
-	//4. Llamado a las configuraciones ya cargadas y validadas
+	// Validamos la configuración antes de abrir conexiones.
 	configurations, err := loadRunConfigurations(cfg)
 	if err != nil {
 		return fmt.Errorf("validando las configuraciones: %w", err)
 	}
 
-	//5. Creacion de Pool de conexiones a Postgres
+	// Abrimos el pool de conexiones a PostgreSQL.
 	pool, err := database.NewPool(ctx, configurations.databaseConfig)
 	if err != nil {
 		return fmt.Errorf("conectando a la base de datos: %w", err)
@@ -78,40 +70,31 @@ func run() error {
 	defer pool.Close() //corre al retornar run(): cierra el pool de conexiones
 	logger.Info("conectado a la base de datos")
 
-	//6. Creacion del repositorio que conecta a la abse de datos
+	// El repositorio usa el pool, el servicio usa el repositorio y el handler usa el servicio.
 	userRepo := repository.NewUserRepository(pool)
 
-	//7. Creacion del servicio de autenticacion
 	authService, err := service.NewAuthService(userRepo, configurations.bcryptCost)
-
 	if err != nil {
 		return fmt.Errorf("creando servicio de autenticación: %w", err)
 	}
-
-	//8. Creacion del handler del servicio de autenticacion
 	authHandler := transport.NewAuthHandler(authService, logger)
-	// Creamos el router de chi.
-	// chi.Router implementa la interfaz http.Handler de Go,
-	// por lo que puede utilizarse directamente como Handler
-	// de un http.Server.
+
+	// Creamos el router de chi.chi.Router implementa la interfaz http.Handler de Go, por lo que puede utilizarse directamente como Handler de un http.Server.
 	router := chi.NewRouter()
 
-	// Registramos una ruta:  GET /health
-	// Cuando alguien haga esta petición, respondemos con HTTP 200
-	// y el texto "ok".
+	// Registramos rutas :
 	router.Route(
 		"/v1", func(r chi.Router) {
 			r.Post("/auth/register", authHandler.Register)
 			r.Post("/auth/login", authHandler.Login)
 
 		})
-
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
 
-	//9. Creacion del servidor (objeto Server). Es un struct que representa el servidor web con su configuracion.
+	//Creacion del servidor (objeto Server). Es un struct que representa el servidor web con su configuracion.
 	//le pasamos la direccion en la que escucha y el router que atiende las peticiones
 
 	srv := &http.Server{
@@ -123,76 +106,78 @@ func run() error {
 		Handler:           router,
 	}
 
-	// Creamos un contexto que se cancelará cuando el sistema
-	// reciba una señal de apagado.
-	// os.Interrupt -> Ctrl+C
-	// SIGTERM      -> señal utilizada normalmente para solicitar
-	//                 el apagado de un proceso (por ejemplo, Docker).
-	//
-	// NotifyContext NO apaga el servidor.
-	// Solamente detecta la señal y cancela el contexto.
-	// ctx  -> contexto que será cancelado
-	// stop -> función para cancelar manualmente el contexto
-	//         y dejar de recibir señales.
+	// Creamos un canal  queempieza vacío y puede guardar un (1) error (chan error) aunque run todavía no lo esté leyendo.
+	// esto crea un espacio para que se puedan enviar errores entre las goroutines
+	ErrChannel := make(chan error, 1)
 
-	// Ejecutamos ListenAndServe en una goroutine porque es un método
-	// bloqueante: mientras el servidor está funcionando, esta llamada
-	// permanece ejecutándose atendiendo peticiones.
-	//
-	// Al utilizar "go", run() puede continuar y quedarse esperando la señal de apagado.
-	//dentro del goroutine se levanta el servidor web
+	// ListenAndServe arranca el servidor y bloquea mientras atiende peticiones.
+	// Lo ejecutamos en otra goroutine para que run pueda esperar en <-ctx.Done() la señal de apagado del ctx.
 	go func() {
 		logger.Info("servicio escuchando", "addr", configurations.serverConfig.addr)
 
-		// ListenAndServe arranca el servidor y normalmente permanece
-		// bloqueado mientras el servidor está funcionando.
+		// Esta goroutine se queda dentro de ListenAndServe mientras el servidor está activo.
+		// err recibe un valor cuando la llamada retorna.
+		// ListenAndServe siempre devuelve un error que indica cómo terminó.
+		//Puede ser un fallo real como un puerto ocupado, o un
+		// http.ErrServerClosed que es la manera en que Go indica que el servicio se cerro mediante Shutdown
+		err := srv.ListenAndServe()
+
+		//Cuando la llamada por fin retorna, nuesta goroutine hace dos cosas:
+
+		// Enviamos ese error a run. Como el canal tiene un búfer de 1,
+		// podemos guardar el resultado aunque run todavía esté en <-ctx.Done().
+		// Eso nos permite seguir hasta stop() si la escucha falló.
+		ErrChannel <- err //enviamos el error por el canal, para comunicarselo a la otra goroutines (canal <- valor)
+
+		// Si el apagado empezó por Ctrl+C o SIGTERM, la señal ya canceló ctx.
+		// run salió de <-ctx.Done() y llamó a Shutdown. Al cerrarse la escucha,
+		// ListenAndServe devuelve http.ErrServerClosed y esta goroutine termina
+		// después de enviar ese resultado por el canal.
 		//
-		// Cuando llamemos a srv.Shutdown(), ListenAndServe terminará
-		// y devolverá http.ErrServerClosed.
-		//
-		// Ese error NO significa que el servidor haya fallado.
-		// Significa que fue cerrado intencionalmente.
-		//
-		// Por eso solamente tratamos como error real aquellos errores
-		// diferentes de http.ErrServerClosed.
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("el servidor murio", "error", err)
-			// Si el servidor falla antes de recibir una señal del SO,
-			// cancelamos el contexto para despertar al main.
+		// Si la escucha falla antes de que llegue una señal, guardamos el error
+		// en el canal y llamamos a stop() para cancelar ctx y desbloquear a run.
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			stop()
 		}
 	}()
 
-	// run() se queda bloqueado aquí.
-	// ctx.Done() devuelve un canal utilizado para avisar
-	// que el contexto fue cancelado.
-	// <- significa "esperar/recibir del canal".
-	// Por lo tanto:
-	//     <-ctx.Done()
-	// significa:
-	//     "Espera aquí hasta que el contexto sea cancelado."
-	// Esto evita que main termine mientras el servidor sigue
-	// funcionando en la goroutine.
+	// La goroutine principal se queda esperando aquí, dentro de run.
+	// ctx.Done() devuelve un canal y <- espera para recibir de él.
+	// Cuando una señal o una llamada a stop() cancela ctx, el canal se cierra
+	// y run puede continuar. Mientras tanto, main sigue esperando que run retorne.
 	<-ctx.Done()
 	logger.Info("apagando el servidor")
 
-	// Creamos un nuevo contexto con un límite de 10 segundos.
-	// Shutdown utilizará este contexto para esperar a que terminen
-	// las peticiones que todavía están siendo procesadas.
-	// Si después de 10 segundos todavía existen peticiones activas,
-	// el contexto se cancela y Shutdown deja de esperar.
+	// Como ctx ya está cancelado, creamos un contexto nuevo para el apagado.
+	// Le damos a Shutdown hasta 10 segundos para esperar las peticiones activas.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	// Liberamos los recursos asociados al contexto cuando terminemos.
 	defer cancel()
 
-	// Le indicamos al servidor que debe apagarse de forma elegante.
-	// Shutdown:
-	// 1. Deja de aceptar nuevas conexiones/peticiones.
-	// 2. Espera a que terminen las peticiones que ya están ejecutándose.
-	// 3. Respeta el límite de tiempo definido en shutdownCtx.
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("apagando el servidor: %w", err)
+	// Shutdown deja de aceptar nuevas conexiones y espera a que terminen
+	// las peticiones activas. Si se agota el plazo, deja de esperar y devuelve
+	// el error del contexto. Si el apagado termina bien, devuelve nil.
+	shutdownErr := srv.Shutdown(shutdownCtx)
+
+	// Leemos el resultado que la otra goroutine envió al terminar ListenAndServe.
+	// http.ErrServerClosed indica que la escucha terminó por el cierre del servidor.
+	errSave := <-ErrChannel
+
+	//ListenAndServe siempre devuelve un error. ErrServerClosed indica el cierre esperado.
+	// Si la escucha falló, devolvemos ese error a main y terminamos run.
+	// En ese caso, ya llamamos a Shutdown, pero omitimos revisar su resultado.
+	if !errors.Is(errSave, http.ErrServerClosed) {
+		return fmt.Errorf("ejecutando el servidor: %w", errSave)
 	}
+
+	// Si la escucha terminó por un cierre esperado, revisamos el apagado.
+	// Shutdown puede fallar, por ejemplo, si se agota el plazo mientras
+	// todavía hay peticiones activas.
+	if shutdownErr != nil {
+		return fmt.Errorf("apagando el servidor: %w", shutdownErr)
+	}
+
+	// La escucha se cerró como esperábamos y el apagado terminó bien.
 	logger.Info("servidor apagado correctamente")
 	return nil
 }
@@ -203,23 +188,6 @@ func loadTimeouts(cfg *config.Config, path string) (time.Duration, error) {
 		return 0, fmt.Errorf("%q vale %s, debe ser al menos %s", path, duration, minTimeOutValue)
 	}
 	return duration, nil
-}
-
-func loadParameterDatabase(cfg *config.Config, path string) (string, error) {
-	parameter := strings.TrimSpace(cfg.GetString(path))
-	if parameter == "" {
-		return "", fmt.Errorf("%q no debe ser vacio", path)
-	}
-
-	return parameter, nil
-}
-
-func loadPort(cfg *config.Config, path string) (int, error) {
-	port := cfg.GetInt(path)
-	if port < minPortAccepted || port > maxPortAccepted {
-		return 0, fmt.Errorf("%q vale %v, debe estar entre %v y %v", path, port, minPortAccepted, maxPortAccepted)
-	}
-	return port, nil
 }
 
 type serverConfig struct {
@@ -241,28 +209,15 @@ func loadRunConfigurations(cfg *config.Config) (runConfig, error) {
 	var errs []error
 
 	//2.Validamos todas las configuraciones, antes de asignarlas a los structs correspondientes [ETAPA: Validacion]
-	host, err := loadParameterDatabase(cfg, "database.postgres.host")
-	if err != nil {
-		errs = append(errs, err)
+	databaseConfig := database.ConfigDSN{
+		Host:     cfg.GetString("database.postgres.host"),
+		Port:     cfg.GetInt("database.postgres.port"),
+		User:     cfg.GetString("database.postgres.user"),
+		Password: cfg.GetString("database.postgres.password"),
+		DBName:   cfg.GetString("database.postgres.dbname"),
+		SSLMode:  cfg.GetString("database.postgres.sslmode"),
 	}
-	portDatabase, err := loadPort(cfg, "database.postgres.port")
-	if err != nil {
-		errs = append(errs, err)
-	}
-	user, err := loadParameterDatabase(cfg, "database.postgres.user")
-	if err != nil {
-		errs = append(errs, err)
-	}
-	password, err := loadParameterDatabase(cfg, "database.postgres.password")
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	dbname, err := loadParameterDatabase(cfg, "database.postgres.dbname")
-	if err != nil {
-		errs = append(errs, err)
-	}
-	sslMode, err := loadParameterDatabase(cfg, "database.postgres.sslmode")
+	err := databaseConfig.ValidateDatabaseParameters()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -272,7 +227,7 @@ func loadRunConfigurations(cfg *config.Config) (runConfig, error) {
 		errs = append(errs, fmt.Errorf("bcrypt.cost vale %d, debe estar entre %d y %d", cost, bcrypt.MinCost, bcrypt.MaxCost))
 	}
 
-	portServer, err := loadPort(cfg, "server.port")
+	portServer, err := config.LoadPort(cfg, "server.port")
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -295,25 +250,17 @@ func loadRunConfigurations(cfg *config.Config) (runConfig, error) {
 		errs = append(errs, err)
 	}
 
-	//Unimos todos los errores que salieron durante el proceso, si no es nil devolvemos el error [ETAPA: DECISION]
+	//Unimos(envolvemos) todos los errores que salieron durante el proceso en un solo error, si no es nil devolvemos el error [ETAPA: DECISION]
+	//De esta forman devolvemos la unidad y luego podemos comparar donde necesitemos validar, con  errors.Is o .As
 	errJoin := errors.Join(errs...)
 	if errJoin != nil {
 		return runConfig{}, errJoin
-	}
+	} //si todos son nil, entonces errJoin es nil
 
 	//3. Creamos el objetos con las configuraciones ya validadas [ETAPA: ARMAR]
 	r := runConfig{
-		databaseConfig: database.ConfigDSN{
-			Host:     host,
-			Port:     portDatabase,
-			User:     user,
-			Password: password,
-			DBName:   dbname,
-			SSLMode:  sslMode,
-		},
-
-		bcryptCost: cost,
-
+		databaseConfig: databaseConfig,
+		bcryptCost:     cost,
 		serverConfig: serverConfig{
 			addr:              addr,
 			idleTimeout:       idleTimeout,
